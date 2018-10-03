@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>按轨迹移动</title>
+
+	<style type="text/css">
+		body{
+			margin: 0;
+			padding: 0;
+		}
+
+		#img{
+			position: absolute;
+			width: 66px;
+			height: 45px;
+			left: 0px;
+			top: 0px;
+		}
+
+		#tip{
+			text-align: center;
+		    margin-top: 300px;
+		    margin-left: auto;
+		}
+	</style>
+
+	<script type="text/javascript">
+		
+		/*
+			布尔值参数是true，表示在捕获阶段调用事件处理程序；
+			就是最不具体的节点先接收事件，最具体的节点最后接收事件
+
+	    	如果是false，在冒泡阶段调用事件处理程序;
+	    	则是先寻找指定的位置，由最具体的元素接收，然后逐级向上传播至最不具体的元素的节点（文档）
+
+
+	    	1.event.stopPropagation(); 	
+	    		事件处理过程中，阻止了事件冒泡，但不会阻击默认行为
+			2.return false;
+				事件处理过程中，阻止了事件冒泡，也阻止了默认行为
+			3.event.preventDefault(); 
+				阻击默认行为
+    	*/
+		var EventUtil = {
+			addHandler: function (oElement, sEvent, fnHandler,bubbling) {
+				bubbling = bubbling || false;
+				oElement.addEventListener ? oElement.addEventListener(sEvent, fnHandler, bubbling) : oElement.attachEvent("on" + sEvent, fnHandler)	//IE专有的attachEvent
+			},
+			removeHandler: function (oElement, sEvent, fnHandler) {
+				oElement.removeEventListener ? oElement.removeEventListener(sEvent, fnHandler, false) : oElement.detachEvent("on" + sEvent, fnHandler)
+			},
+			addLoadHandler: function (fnHandler) {
+				this.addHandler(window, "load", fnHandler)
+			}
+		};
+
+		var img, 
+			byClick, 
+			byTrail ,
+			tip,
+		    aPos = [],
+		    dealType;
+
+		EventUtil.addLoadHandler(function(){
+			img = document.getElementById("img");
+
+			byClick = document.getElementById("byClick");
+			byTrail = document.getElementById("byTrail");
+			reset = document.getElementById("reset");
+			tip = document.getElementById("tip");
+
+			EventUtil.addHandler(byClick,"click",function(event){
+				event.stopPropagation();
+
+				resetSetup();
+				tip.innerHTML="鼠标点击页面，人物将移动至鼠标位置！";
+				this.innerHTML="移动到鼠标点击处(已激活)";
+				
+				EventUtil.addHandler(document,"click",leftClickHandler);	
+			});
+
+			EventUtil.addHandler(byTrail,"click",function(event){
+				event.stopPropagation();
+
+				resetSetup();
+				tip.innerHTML="按住鼠标左键，在页面移动，人物将按照鼠标轨迹移动！";
+				this.innerHTML="按鼠标轨迹移动(已激活)";
+
+				EventUtil.addHandler(document,"mousedown",mousedownHandler);
+				EventUtil.addHandler(document,"mouseup",mouseupHandler);
+			});
+
+			//重置
+			EventUtil.addHandler(reset,"click", function(event){
+				event.stopPropagation();
+				// event.preventDefault();
+				resetSetup();
+			});
+
+		});
+
+		
+		function startMove(obj, position, callback){
+			clearInterval(obj.timer);
+			obj.timer = setInterval(function (){
+				doMove(obj, position, 5, callback);
+			}, 30)	
+		}
+
+
+		function doMove(obj, position, step, callback){
+
+			if(!isNaN(step) && step>0){
+				var iX = (position.x - obj.offsetLeft) / step;
+				var iY = (position.y - obj.offsetTop) / step;
+				iX = iX > 0 ? Math.ceil(iX) : Math.floor(iX);
+				iY = iY > 0 ? Math.ceil(iY) : Math.floor(iY);
+				if (position.x == obj.offsetLeft && position.y == obj.offsetTop){
+					clearInterval(obj.timer);
+					callback && callback();	
+				}else{
+					obj.style.left = obj.offsetLeft + iX + "px";
+					obj.style.top = obj.offsetTop + iY + "px";	
+				}
+			}else{
+				obj.style.left = position.x + "px";
+				obj.style.top = position.y + "px";	
+			}
+			
+		}
+
+		function imgSrc(obj,src){
+			obj.src = src;
+			return obj;
+		}
+
+		function leftClickHandler(event){
+			console.log("leftClickHandler");
+			
+			var event = event || window.event;  //IE：window.event
+			// console.log("clientX: ");
+			// console.log(event.clientX);
+
+			// console.log("offsetX: ");
+			// console.log(event.offsetX);
+
+			// console.log("screenX: ");
+			// console.log(event.screenX);
+
+			// console.log("x: ");
+			// console.log(event.x);
+
+			startMove(imgSrc(img,"2.gif"),{
+				x: event.offsetX,
+				y: event.offsetY
+			},function(){
+				imgSrc(img,"1.gif");
+			});
+			
+		}
+
+		function mousedownHandler(event){
+			console.log("mousedownHandler");
+
+			aPos = [{x:img.offsetLeft, y:img.offsetTop}];
+			var event = event || window.event;			
+			aPos.push({x:event.clientX, y:event.clientY});
+			document.onmousemove = function (event){
+				var event = event || window.event;
+				aPos.push({x:event.clientX, y:event.clientY});	
+				return false;
+			}
+			return false;
+			
+		}
+
+		function mouseupHandler(event){
+			console.log("mouseupHandler");
+
+			document.onmousemove = null;
+			imgSrc(img,"2.gif");	
+
+			img.timer = setInterval(function (){
+				if(aPos.length == 0){
+					clearInterval(img.timer);
+					imgSrc(img,"1.gif");	
+					return;	
+				};
+				doMove(img,{
+					x:aPos[0].x,
+					y:aPos[0].y
+				},0,function(){
+
+				});
+				aPos.shift();
+			}, 30);
+			
+		}
+
+		function resetSetup(){
+			console.log("resetSetup");
+
+			if(tip){
+				tip.innerHTML="";
+			}
+			if(byClick){
+				byClick.innerHTML="移动到鼠标点击处";
+			}
+			if(byTrail){
+				byTrail.innerHTML="按鼠标轨迹移动";
+			}
+			if(img){
+				if(img.timer){
+					clearInterval(img.timer);
+				}
+				img.style.top = "0px";
+				img.style.left = "0px";
+			}
+
+			EventUtil.removeHandler(document,"click",leftClickHandler);
+			EventUtil.removeHandler(document,"mousedown",mousedownHandler);
+			EventUtil.removeHandler(document,"mouseup",mouseupHandler);
+		
+		}
+	</script>
+
+</head>
+<body>
+
+	<img id="img" src="1.gif" alt="..." />
+
+	<div style="text-align: center; margin-top: 35px">
+		<button type="button" id="byClick">移动到鼠标点击处</button>
+		<button type="button" id="byTrail">按鼠标轨迹移动</button>
+		<button type="button" id="reset">重置</button>
+	</div>
+
+	<p id="tip"></p>
+
+	
+</body>
+</html>
